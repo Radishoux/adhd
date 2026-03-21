@@ -11,6 +11,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from '@dnd-kit/utilities';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
+import { Columns2, PlusSquare } from 'lucide-react';
 import { useDrag, useDrop } from 'react-dnd';
 import type { Task } from '../../types/planner';
 import { DND_ITEM_TYPES } from '../../types/dnd';
@@ -29,6 +30,7 @@ interface DayTreeProps {
   onUpdateTask: (taskId: string, patch: Partial<Task>) => void;
   onAddSubtask: (parentTaskId: string, name: string) => void;
   onSetDependencies: (taskId: string, deps: string[]) => { ok: boolean; reason?: string };
+  onCreateSlot: (dayIndex: number, mode: 'single' | 'split') => void;
 }
 
 interface SortableTaskCardProps {
@@ -111,6 +113,7 @@ export function DayTree({
   onUpdateTask,
   onAddSubtask,
   onSetDependencies,
+  onCreateSlot,
 }: DayTreeProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -164,7 +167,29 @@ export function DayTree({
         aria-label={`Planner for ${format(date, 'EEEE')}`}
       >
       <header className="mb-3 border-b border-white/10 pb-2">
-        <p className="text-xs uppercase tracking-[0.3em] text-cyan-200">{format(date, 'EEE')}</p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.3em] text-cyan-200">{format(date, 'EEE')}</p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onCreateSlot(dayIndex, 'single')}
+              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-200"
+              aria-label="Add single slot"
+              title="Add slot"
+            >
+              <PlusSquare size={12} /> Slot
+            </button>
+            <button
+              type="button"
+              onClick={() => onCreateSlot(dayIndex, 'split')}
+              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-200"
+              aria-label="Add split slot"
+              title="Add split slot"
+            >
+              <Columns2 size={12} /> Split
+            </button>
+          </div>
+        </div>
         <h3 className="text-lg font-semibold text-slate-100">{format(date, 'dd MMM')}</h3>
       </header>
 

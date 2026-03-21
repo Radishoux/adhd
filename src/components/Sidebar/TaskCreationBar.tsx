@@ -9,10 +9,12 @@ import { LabelPicker } from '../LabelPicker/LabelPicker';
 interface TaskCreationBarProps {
   tasks: Task[];
   availableLabels: Label[];
+  savedLabels: Label[];
   selectedFilters: string[];
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onChangeFilters: (labels: string[]) => void;
+  onSaveLabelTemplate: (label: Label) => void;
   onCreateTask: (draft: NewTaskDraft) => void;
   onTogglePoolTaskCompleted: (taskId: string, completed: boolean) => void;
   onMoveCompletedToPool: (taskId: string) => void;
@@ -76,10 +78,12 @@ function PoolTaskItem({ task, onComplete }: PoolTaskItemProps) {
 export function TaskCreationBar({
   tasks,
   availableLabels,
+  savedLabels,
   selectedFilters,
   searchTerm,
   onSearchChange,
   onChangeFilters,
+  onSaveLabelTemplate,
   onCreateTask,
   onTogglePoolTaskCompleted,
   onMoveCompletedToPool,
@@ -203,7 +207,12 @@ export function TaskCreationBar({
           </label>
         </div>
 
-        <LabelPicker value={labels} onChange={setLabels} />
+        <LabelPicker
+          value={labels}
+          onChange={setLabels}
+          savedLabels={savedLabels}
+          onSaveLabelTemplate={onSaveLabelTemplate}
+        />
 
         <button
           type="submit"

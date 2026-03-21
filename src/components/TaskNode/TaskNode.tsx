@@ -10,7 +10,7 @@ import {
   SquareSplitHorizontal,
   Trash2,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Task } from '../../types/planner';
 import { areDependenciesSatisfied, flattenTasks } from '../../utils/taskTree';
 import { DepEditor } from '../DepEditor/DepEditor';
@@ -44,9 +44,15 @@ export function TaskNode({
   const [subtaskName, setSubtaskName] = useState('');
   const [timerStart, setTimerStart] = useState<number | null>(null);
   const [splitChoice, setSplitChoice] = useState(0);
+  const [splitMode, setSplitMode] = useState<'parallel' | 'linear'>('parallel');
 
   const blocked = useMemo(() => !areDependenciesSatisfied(task, allTasks), [task, allTasks]);
   const hasSplitLabel = task.labels.some((label) => label.text.toLowerCase() === 'split');
+
+  useEffect(() => {
+    setDraftName(task.name);
+    setDraftDesc(task.description ?? '');
+  }, [task.name, task.description]);
 
   const applyEdit = () => {
     onUpdate(task.id, {
@@ -90,7 +96,7 @@ export function TaskNode({
     return task.dependencies.map((depId) => map.get(depId)).filter(Boolean) as string[];
   }, [allTasks, task.dependencies]);
 
-  const visibleSubtasks = hasSplitLabel && task.subtasks.length > 1 ? [task.subtasks[splitChoice]] : task.subtasks;
+  const visibleSubtasks = hasSplitLabel && task.subtasks.length > 1 && splitMode === 'linear' ? [task.subtasks[splitChoice]] : task.subtasks;
 
   return (
     <motion.div
@@ -245,36 +251,70 @@ export function TaskNode({
             </div>
 
             {hasSplitLabel && task.subtasks.length > 1 ? (
-              <div className="flex items-center gap-2 text-xs text-slate-300">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
                 <SquareSplitHorizontal size={13} />
-                <span>Choose next branch:</span>
-                <select
-                  className="rounded border border-white/10 bg-black/30 px-2 py-1"
-                  value={splitChoice}
-                  onChange={(event) => setSplitChoice(Number(event.target.value))}
+                <span>Branch mode:</span>
+                <button
+                  type="button"
+                  className={`rounded border px-2 py-1 ${splitMode === 'parallel' ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-white/10 bg-black/30 text-slate-300'}`}
+                  onClick={() => setSplitMode('parallel')}
                 >
-                  {task.subtasks.map((sub, index) => (
-                    <option key={sub.id} value={index}>
-                      {sub.name}
-                    </option>
-                  ))}
-                </select>
+                  Parallel
+                </button>
+                <button
+                  type="button"
+                  className={`rounded border px-2 py-1 ${splitMode === 'linear' ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100' : 'border-white/10 bg-black/30 text-slate-300'}`}
+                  onClick={() => setSplitMode('linear')}
+                >
+                  Continue unsplit
+                </button>
+                {splitMode === 'linear' ? (
+                  <select
+                    className="rounded border border-white/10 bg-black/30 px-2 py-1"
+                    value={splitChoice}
+                    onChange={(event) => setSplitChoice(Number(event.target.value))}
+                  >
+                    {task.subtasks.map((sub, index) => (
+                      <option key={sub.id} value={index}>
+                        {sub.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
               </div>
             ) : null}
 
-            {visibleSubtasks.map((subtask) => (
-              <TaskNode
-                key={subtask.id}
-                task={subtask}
-                dayIndex={dayIndex}
-                depth={depth + 1}
-                allTasks={allTasks}
-                onToggleComplete={onToggleComplete}
-                onUpdate={onUpdate}
-                onAddSubtask={onAddSubtask}
-                onSetDependencies={onSetDependencies}
-              />
-            ))}
+            {hasSplitLabel && splitMode === 'parallel' && visibleSubtasks.length > 1 ? (
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                {visibleSubtasks.map((subtask) => (
+                  <TaskNode
+                    key={subtask.id}
+                    task={subtask}
+                    dayIndex={dayIndex}
+                    depth={depth + 1}
+                    allTasks={allTasks}
+                    onToggleComplete={onToggleComplete}
+                    onUpdate={onUpdate}
+                    onAddSubtask={onAddSubtask}
+                    onSetDependencies={onSetDependencies}
+                  />
+                ))}
+              </div>
+            ) : (
+              visibleSubtasks.map((subtask) => (
+                <TaskNode
+                  key={subtask.id}
+                  task={subtask}
+                  dayIndex={dayIndex}
+                  depth={depth + 1}
+                  allTasks={allTasks}
+                  onToggleComplete={onToggleComplete}
+                  onUpdate={onUpdate}
+                  onAddSubtask={onAddSubtask}
+                  onSetDependencies={onSetDependencies}
+                />
+              ))
+            )}
           </div>
         ) : null}
       </div>

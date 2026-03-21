@@ -16,6 +16,7 @@ interface WeekPlannerProps {
   onUpdateTask: (dayIndex: number, taskId: string, patch: Partial<Task>) => void;
   onAddSubtask: (dayIndex: number, parentTaskId: string, name: string) => void;
   onSetDependencies: (dayIndex: number, taskId: string, deps: string[]) => { ok: boolean; reason?: string };
+  onCreateSlot: (dayIndex: number, mode: 'single' | 'split') => void;
 }
 
 function matchesFilters(task: Task, filters: string[], searchTerm: string): boolean {
@@ -69,6 +70,7 @@ export function WeekPlanner({
   onUpdateTask,
   onAddSubtask,
   onSetDependencies,
+  onCreateSlot,
 }: WeekPlannerProps) {
   const allTasks = useMemo(() => {
     const inWeek = week.days.flatMap((day) => day.tasksRoot);
@@ -94,6 +96,7 @@ export function WeekPlanner({
             onAddSubtask(dayIndex, parentTaskId, name)
           }
           onSetDependencies={(taskId, deps) => onSetDependencies(dayIndex, taskId, deps)}
+          onCreateSlot={onCreateSlot}
         />
       ))}
     </div>

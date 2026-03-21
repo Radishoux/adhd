@@ -18,6 +18,7 @@ function App() {
     weeks,
     activeWeekId,
     globalTaskPool,
+    savedLabels,
     completedTasks,
     labelFilters,
     showRecurringOnlyCompleted,
@@ -26,6 +27,8 @@ function App() {
     sidebarWidth,
     searchTerm,
     createTaskInPool,
+    saveLabelTemplate,
+    createDaySlot,
     placePoolTaskIntoDay,
     moveCompletedTaskToDay,
     moveTaskAcrossDays,
@@ -60,12 +63,16 @@ function App() {
   );
 
   const allLabels = useMemo(
-    () =>
-      collectAllLabels([
+    () => {
+      const discovered = collectAllLabels([
         ...globalTaskPool,
         ...(activeWeek?.days.flatMap((day) => day.tasksRoot) ?? []),
-      ]),
-    [globalTaskPool, activeWeek],
+      ]);
+      const byText = new Map(discovered.map((label) => [label.text.toLowerCase(), label]));
+      savedLabels.forEach((label) => byText.set(label.text.toLowerCase(), label));
+      return Array.from(byText.values());
+    },
+    [globalTaskPool, activeWeek, savedLabels],
   );
 
   const filteredCompleted = useMemo(() => {
@@ -239,7 +246,7 @@ function App() {
                 week={activeWeek}
                 globalTasks={globalTaskPool}
                 labelFilters={labelFilters}
-                searchTerm={searchTerm}
+                searchTerm=""
                 onDropPoolTask={placePoolTaskIntoDay}
                 onDropCompletedTask={moveCompletedTaskToDay}
                 onMoveAcrossDays={moveTaskAcrossDays}
@@ -250,6 +257,7 @@ function App() {
                   addSubtask(dayIndex, parentTaskId, { name, labels: [] })
                 }
                 onSetDependencies={setTaskDependencies}
+                onCreateSlot={createDaySlot}
               />
             ) : null}
           </main>
@@ -287,10 +295,12 @@ function App() {
                   <TaskCreationBar
                     tasks={globalTaskPool}
                     availableLabels={allLabels}
+                    savedLabels={savedLabels}
                     selectedFilters={labelFilters}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
                     onChangeFilters={setLabelFilters}
+                    onSaveLabelTemplate={saveLabelTemplate}
                     onCreateTask={createTaskInPool}
                     onTogglePoolTaskCompleted={togglePoolTaskCompleted}
                     onMoveCompletedToPool={returnCompletedTaskToPool}

@@ -6,6 +6,7 @@ import type {
   Day,
   DepValidationResult,
   HistoryEntry,
+  Label,
   NewTaskDraft,
   Task,
   Week,
@@ -61,6 +62,7 @@ interface PlannerPersistState {
   weeks: PersistWeek[];
   activeWeekId: string;
   globalTaskPool: PersistTask[];
+  savedLabels: Label[];
   completedTasks: PersistCompletedTaskRecord[];
   labelFilters: string[];
   showRecurringOnlyCompleted: boolean;
@@ -74,6 +76,7 @@ interface PlannerState {
   weeks: Week[];
   activeWeekId: string;
   globalTaskPool: Task[];
+  savedLabels: Label[];
   completedTasks: CompletedTaskRecord[];
   labelFilters: string[];
   showRecurringOnlyCompleted: boolean;
@@ -83,6 +86,8 @@ interface PlannerState {
   activeTaskId?: string;
   searchTerm: string;
   createTaskInPool: (draft: NewTaskDraft) => void;
+  saveLabelTemplate: (label: Label) => void;
+  createDaySlot: (dayIndex: number, mode: 'single' | 'split') => void;
   addHistoryEntry: (dayIndex: number, taskId: string, entry: Omit<HistoryEntry, 'timestamp'> & { timestamp?: Date }) => void;
   placePoolTaskIntoDay: (taskId: string, dayIndex: number) => void;
   moveCompletedTaskToDay: (taskId: string, dayIndex: number) => void;
@@ -125,6 +130,14 @@ function createTaskFromDraft(draft: NewTaskDraft): Task {
     recurring: draft.recurring,
     estimatedTime: draft.estimatedTime,
   };
+}
+
+function mergeUniqueLabels(base: Label[], incoming: Label[]): Label[] {
+  const byText = new Map(base.map((label) => [label.text.toLowerCase(), label]));
+  incoming.forEach((label) => {
+    byText.set(label.text.toLowerCase(), label);
+  });
+  return Array.from(byText.values());
 }
 
 function createDefaultWeek(): Week {
@@ -170,6 +183,7 @@ function serializeState(state: PlannerState): PlannerPersistState {
     })),
     activeWeekId: state.activeWeekId,
     globalTaskPool: state.globalTaskPool.map(serializeTask),
+    savedLabels: state.savedLabels,
     completedTasks: state.completedTasks.map((entry) => ({
       ...entry,
       task: serializeTask(entry.task),
@@ -195,6 +209,7 @@ function deserializeState(persist: PlannerPersistState): Partial<PlannerState> {
     })),
     activeWeekId: persist.activeWeekId,
     globalTaskPool: persist.globalTaskPool.map(deserializeTask),
+    savedLabels: persist.savedLabels ?? [],
     completedTasks: persist.completedTasks.map((entry) => ({
       ...entry,
       task: deserializeTask(entry.task),
@@ -255,6 +270,7 @@ export const useWeekStore = create<PlannerState>((set, get) => {
     weeks: loaded.weeks?.length ? loaded.weeks : [initialWeek],
     activeWeekId: loaded.activeWeekId ?? initialWeek.id,
     globalTaskPool: loaded.globalTaskPool ?? [],
+    savedLabels: loaded.savedLabels ?? [],
     completedTasks: loaded.completedTasks ?? [],
     labelFilters: loaded.labelFilters ?? [],
     showRecurringOnlyCompleted: loaded.showRecurringOnlyCompleted ?? true,
@@ -267,7 +283,84 @@ export const useWeekStore = create<PlannerState>((set, get) => {
       if (!draft.name.trim()) return;
 
       set((state) => {
-        const next = { ...state, globalTaskPool: [...state.globalTaskPool, createTaskFromDraft(draft)] };
+        const next = {
+          ...state,
+          globalTaskPool: [...state.globalTaskPool, createTaskFromDraft(draft)],
+          savedLabels: mergeUniqueLabels(state.savedLabels, draft.labels),
+        };
+        saveState(next);
+        return next;
+      });
+    },
+    saveLabelTemplate: (label) => {
+      set((state) => {
+        const next = {
+          ...state,
+          savedLabels: mergeUniqueLabels(state.savedLabels, [label]),
+        };
+        saveState(next);
+        return next;
+      });
+    },
+    createDaySlot: (dayIndex, mode) => {
+      set((state) => {
+        const slotCount = state.weeks
+          .find((week) => week.id === state.activeWeekId)
+          ?.days[dayIndex]?.tasksRoot.filter((task) => task.labels.some((label) => label.text.toLowerCase() === 'slot')).length ?? 0;
+
+        const slotName = `Slot ${slotCount + 1}`;
+        const baseSlot: Task = {
+          id: uuidv4(),
+          name: slotName,
+          description: mode === 'split' ? 'Split slot with parallel branches' : 'Single linear slot',
+          completed: false,
+          subtasks: [],
+          dependencies: [],
+          labels: [{ color: '#60a5fa', text: 'Slot' }],
+          history: [],
+        };
+
+        if (mode === 'split') {
+          baseSlot.labels = [...baseSlot.labels, { color: '#f59e0b', text: 'Split' }];
+          baseSlot.subtasks = [
+            {
+              id: uuidv4(),
+              name: `${slotName} - Left`,
+              description: 'Left branch',
+              completed: false,
+              subtasks: [],
+              dependencies: [],
+              labels: [{ color: '#60a5fa', text: 'Slot' }],
+              history: [],
+            },
+            {
+              id: uuidv4(),
+              name: `${slotName} - Right`,
+              description: 'Right branch',
+              completed: false,
+              subtasks: [],
+              dependencies: [],
+              labels: [{ color: '#60a5fa', text: 'Slot' }],
+              history: [],
+            },
+          ];
+        }
+
+        const nextWeeks = state.weeks.map((week) => {
+          if (week.id !== state.activeWeekId) return week;
+          return {
+            ...week,
+            days: week.days.map((day, idx) =>
+              idx === dayIndex ? { ...day, tasksRoot: [...day.tasksRoot, baseSlot] } : day,
+            ),
+          };
+        });
+
+        const next = {
+          ...state,
+          weeks: nextWeeks,
+          savedLabels: mergeUniqueLabels(state.savedLabels, baseSlot.labels),
+        };
         saveState(next);
         return next;
       });
@@ -301,7 +394,12 @@ export const useWeekStore = create<PlannerState>((set, get) => {
           };
         });
 
-        const next = { ...state, weeks: nextWeeks };
+        const removeResult = removeTaskById(state.globalTaskPool, taskId);
+        const next = {
+          ...state,
+          weeks: nextWeeks,
+          globalTaskPool: removeResult.next,
+        };
         saveState(next);
         return next;
       });
